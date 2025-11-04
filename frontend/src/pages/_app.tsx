@@ -13,7 +13,7 @@ function AntipodeApp({ Component, pageProps }: AppProps) {
       <HydrationBoundary state={pageProps.dehydratedState}>
         <Component {...pageProps} />
       </HydrationBoundary>
-      <ReactQueryDevtools initialIsOpen={false} position="bottom-right" />
+      <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
   );
 }
