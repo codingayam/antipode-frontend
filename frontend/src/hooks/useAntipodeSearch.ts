@@ -32,7 +32,9 @@ export function useAntipodeSearch() {
     mutationKey: ['antipode-search'],
     mutationFn: async (payload) => {
       if ('device' in payload.location) {
-        const antipode = computeAntipodeFromDevicePayload(payload);
+        const antipode = computeAntipodeFromDevicePayload(
+          payload as DeviceSearchPayload,
+        );
         return {
           antipode,
           listings: [],
