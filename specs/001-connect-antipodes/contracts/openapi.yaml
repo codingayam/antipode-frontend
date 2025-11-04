@@ -1,0 +1,435 @@
+openapi: 3.1.0
+info:
+  title: Antipode Connection API
+  version: 0.1.0
+  description: >
+    RESTful contracts backing the antipode discovery and messaging experience.
+    All endpoints require TLS and JSON payloads. Authentication assumed via session token/JWT.
+servers:
+  - url: https://api.antipode.example.com/v1
+    description: Production
+  - url: https://staging-api.antipode.example.com/v1
+    description: Staging
+tags:
+  - name: Antipode
+    description: Antipode lookup and listings
+  - name: Members
+    description: Member profile controls
+  - name: Conversations
+    description: Messaging threads and messages
+paths:
+  /antipode/search:
+    post:
+      summary: Find antipode matches for a supplied location
+      tags: [Antipode]
+      operationId: searchAntipode
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AntipodeSearchRequest'
+      responses:
+        '200':
+          description: Antipode result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AntipodeSearchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /members/me:
+    get:
+      summary: Get current member profile
+      tags: [Members]
+      operationId: getCurrentMember
+      responses:
+        '200':
+          description: Current member profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    patch:
+      summary: Update profile basics (availability, intro, visibility)
+      tags: [Members]
+      operationId: updateCurrentMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMemberRequest'
+      responses:
+        '200':
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemberProfile'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /conversations:
+    get:
+      summary: List active conversation threads for the member
+      tags: [Conversations]
+      operationId: listConversations
+      parameters:
+        - in: query
+          name: status
+          schema:
+            $ref: '#/components/schemas/ThreadStatus'
+          description: Filter by thread status (defaults to active)
+      responses:
+        '200':
+          description: Collection of conversation summaries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ConversationSummary'
+    post:
+      summary: Start a new conversation with an antipode member
+      tags: [Conversations]
+      operationId: startConversation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StartConversationRequest'
+      responses:
+        '201':
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Active conversation already exists for this member pair
+  /conversations/{threadId}:
+    get:
+      summary: Retrieve specific conversation thread with messages
+      tags: [Conversations]
+      operationId: getConversation
+      parameters:
+        - $ref: '#/components/parameters/ThreadId'
+      responses:
+        '200':
+          description: Conversation with message history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      summary: Update thread status (snooze or close)
+      tags: [Conversations]
+      operationId: updateConversationStatus
+      parameters:
+        - $ref: '#/components/parameters/ThreadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateConversationStatusRequest'
+      responses:
+        '200':
+          description: Updated conversation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Conversation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /conversations/{threadId}/messages:
+    post:
+      summary: Send a message in an existing conversation
+      tags: [Conversations]
+      operationId: sendMessage
+      parameters:
+        - $ref: '#/components/parameters/ThreadId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+      responses:
+        '201':
+          description: Message accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Message'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  parameters:
+    ThreadId:
+      in: path
+      name: threadId
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    BadRequest:
+      description: Invalid payload or domain validation failure
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Authentication required
+    NotFound:
+      description: Resource not found
+  schemas:
+    AntipodeSearchRequest:
+      type: object
+      required: [location]
+      properties:
+        location:
+          oneOf:
+            - $ref: '#/components/schemas/DeviceLocation'
+            - $ref: '#/components/schemas/ManualLocation'
+        includeUnavailable:
+          type: boolean
+          default: false
+        clientMetadata:
+          type: object
+          additionalProperties:
+            type: string
+    DeviceLocation:
+      type: object
+      required: [latitude, longitude, accuracyMeters]
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        accuracyMeters:
+          type: number
+          format: double
+    ManualLocation:
+      type: object
+      required: [query]
+      properties:
+        query:
+          type: string
+          description: Free-form location string supplied by visitor
+    AntipodeSearchResponse:
+      type: object
+      required: [antipode, listings, snapshotId]
+      properties:
+        antipode:
+          $ref: '#/components/schemas/AntipodeLocation'
+        listings:
+          type: array
+          items:
+            $ref: '#/components/schemas/AntipodeListing'
+        emptyState:
+          type: string
+          description: Message to display when no members are available
+        snapshotId:
+          type: string
+          format: uuid
+          description: Identifier of the location snapshot generated for this search
+    AntipodeLocation:
+      type: object
+      required: [latitude, longitude, label]
+      properties:
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        label:
+          type: string
+        nearestPopulatedPlace:
+          type: string
+    AntipodeListing:
+      type: object
+      required: [memberId, displayName, availability, intro, distanceKm]
+      properties:
+        memberId:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+        availability:
+          $ref: '#/components/schemas/AvailabilityStatus'
+        intro:
+          type: string
+        distanceKm:
+          type: number
+          format: double
+        profilePhotoUrl:
+          type: string
+          format: uri
+    MemberProfile:
+      type: object
+      required: [id, displayName, availability, intro, visibilityScope, homeLocation]
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        displayName:
+          type: string
+        intro:
+          type: string
+        availability:
+          $ref: '#/components/schemas/AvailabilityStatus'
+        visibilityScope:
+          $ref: '#/components/schemas/VisibilityScope'
+        homeLocation:
+          $ref: '#/components/schemas/AntipodeLocation'
+        timeZone:
+          type: string
+        lastActiveAt:
+          type: string
+          format: date-time
+    UpdateMemberRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+        intro:
+          type: string
+          maxLength: 280
+        availability:
+          $ref: '#/components/schemas/AvailabilityStatus'
+        visibilityScope:
+          $ref: '#/components/schemas/VisibilityScope'
+    StartConversationRequest:
+      type: object
+      required: [recipientId, message, originSnapshotId]
+      properties:
+        recipientId:
+          type: string
+          format: uuid
+        message:
+          type: string
+          maxLength: 2000
+        originSnapshotId:
+          type: string
+          format: uuid
+    UpdateConversationStatusRequest:
+      type: object
+      required: [status]
+      properties:
+        status:
+          $ref: '#/components/schemas/ThreadStatus'
+    SendMessageRequest:
+      type: object
+      required: [body]
+      properties:
+        body:
+          type: string
+          maxLength: 2000
+    ConversationSummary:
+      type: object
+      required: [id, participant, lastMessagePreview, status, lastMessageAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        participant:
+          $ref: '#/components/schemas/MemberProfile'
+        lastMessagePreview:
+          type: string
+        status:
+          $ref: '#/components/schemas/ThreadStatus'
+        lastMessageAt:
+          type: string
+          format: date-time
+    Conversation:
+      type: object
+      required: [id, participants, status, messages]
+      properties:
+        id:
+          type: string
+          format: uuid
+        participants:
+          type: array
+          minItems: 2
+          maxItems: 2
+          items:
+            $ref: '#/components/schemas/MemberProfile'
+        status:
+          $ref: '#/components/schemas/ThreadStatus'
+        messages:
+          type: array
+          items:
+            $ref: '#/components/schemas/Message'
+        lastMessageAt:
+          type: string
+          format: date-time
+    Message:
+      type: object
+      required: [id, senderId, body, sentAt, deliveryStatus]
+      properties:
+        id:
+          type: string
+          format: uuid
+        senderId:
+          type: string
+          format: uuid
+        body:
+          type: string
+        sentAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+        deliveryStatus:
+          $ref: '#/components/schemas/DeliveryStatus'
+    ErrorResponse:
+      type: object
+      required: [code, message]
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+    AvailabilityStatus:
+      type: string
+      enum: [available, temporarily_unavailable, invisible]
+    VisibilityScope:
+      type: string
+      enum: [public, connections_only]
+    ThreadStatus:
+      type: string
+      enum: [active, snoozed, closed]
+    DeliveryStatus:
+      type: string
+      enum: [sent, delivered, read]
