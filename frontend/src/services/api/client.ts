@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientConfig } from '@tanstack/react-query';
 
-const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:4000';
+const DEFAULT_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? '';
 
 export interface ApiClientOptions {
   baseUrl?: string;
@@ -60,6 +60,9 @@ export class ApiClient {
   private buildUrl(path: string): string {
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return path;
+    }
+    if (!this.baseUrl) {
+      throw new Error('API base URL is not configured.');
     }
     return `${this.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
   }
