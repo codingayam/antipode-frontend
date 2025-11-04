@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from './client';
 import type {
@@ -63,30 +64,43 @@ export function useConversationSummariesQuery(status?: ThreadStatus) {
   const setSummaries = useConversationStore((state) => state.setSummaries);
   const ensureSocket = useConversationStore((state) => state.ensureSocket);
 
-  return useQuery({
+  const queryResult = useQuery({
     queryKey: [...CONVERSATIONS_QUERY_KEY, status ?? 'all'],
     queryFn: () => fetchConversationSummaries(status),
     staleTime: 1000 * 15,
-    onSuccess: (response) => {
-      setSummaries(response.items);
-      ensureSocket();
-    },
   });
+
+  useEffect(() => {
+    if (!queryResult.data) {
+      return;
+    }
+
+    setSummaries(queryResult.data.items);
+    ensureSocket();
+  }, [queryResult.data, setSummaries, ensureSocket]);
+
+  return queryResult;
 }
 
 export function useConversationQuery(threadId?: string) {
   const upsertConversation = useConversationStore((state) => state.upsertConversation);
   const ensureSocket = useConversationStore((state) => state.ensureSocket);
 
-  return useQuery({
+  const queryResult = useQuery({
     queryKey: ['conversation', threadId],
     queryFn: () => fetchConversation(threadId as string),
     enabled: Boolean(threadId),
-    onSuccess: (conversation) => {
-      upsertConversation(conversation);
-      ensureSocket();
-    },
   });
+
+  useEffect(() => {
+    if (!queryResult.data) {
+      return;
+    }
+    upsertConversation(queryResult.data);
+    ensureSocket();
+  }, [queryResult.data, upsertConversation, ensureSocket]);
+
+  return queryResult;
 }
 
 export function useStartConversationMutation() {
